@@ -1,0 +1,4 @@
+[portal]
+DBusName=org.freedesktop.impl.portal.desktop.hyprland_remote
+Interfaces=org.freedesktop.impl.portal.RemoteDesktop;
+UseIn=Hyprland;

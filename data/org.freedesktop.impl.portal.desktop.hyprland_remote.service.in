@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.hyprland_remote
+Exec=@LIBEXECDIR@/hyprland-remote-desktop-portal
+SystemdService=hyprland-remote-desktop-portal.service

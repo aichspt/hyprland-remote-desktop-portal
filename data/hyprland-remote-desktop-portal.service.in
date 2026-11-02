@@ -1,0 +1,12 @@
+[Unit]
+Description=RemoteDesktop portal backend for Hyprland
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.hyprland_remote
+ExecStart=@LIBEXECDIR@/hyprland-remote-desktop-portal
+Restart=on-failure
+Slice=session.slice
