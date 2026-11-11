@@ -13,6 +13,92 @@ No such interface "org.freedesktop.portal.RemoteDesktop"
 Deskflow in client mode is one of these programs. This backend provides only
 that interface, alongside the stock Hyprland portal.
 
+## Install
+
+You need Hyprland with `xdg-desktop-portal` and `xdg-desktop-portal-hyprland`.
+Pick one of the options below, then [restart the portal](#after-installing).
+
+### Arch Linux: AUR
+
+```sh
+yay -S hyprland-remote-desktop-portal-git
+```
+
+To build the same package yourself without an AUR helper:
+
+```sh
+git clone https://github.com/aichspt/hyprland-remote-desktop-portal.git
+cd hyprland-remote-desktop-portal/packaging/aur
+makepkg -si
+```
+
+The package installs to `/usr` and puts the portal routing in
+`/etc/xdg/xdg-desktop-portal/hyprland-portals.conf`, so it works for every
+user. Install `hyprland-guiutils` too if Flatpak apps will use it (it provides
+the permission prompt).
+
+### From source (per user, no root)
+
+Install the dependencies. On Arch:
+
+```sh
+sudo pacman -S --needed base-devel git libei systemd-libs wayland libxkbcommon
+```
+
+Other distros need the development packages for `libei` (which includes
+`libeis`), `libsystemd`, `wayland-client`, `xkbcommon`, and `wayland-scanner`.
+
+Then build and install:
+
+```sh
+git clone https://github.com/aichspt/hyprland-remote-desktop-portal.git
+cd hyprland-remote-desktop-portal
+make
+make install
+```
+
+This installs:
+
+| File | Purpose |
+|------|---------|
+| `~/.local/libexec/hyprland-remote-desktop-portal` | the daemon |
+| `~/.local/share/xdg-desktop-portal/portals/hyprland-remote.portal` | registers the backend |
+| `~/.local/share/dbus-1/services/…hyprland_remote.service` | D-Bus activation |
+| `~/.config/systemd/user/hyprland-remote-desktop-portal.service` | the service D-Bus activates |
+| `~/.config/xdg-desktop-portal/hyprland-portals.conf` | routes RemoteDesktop here |
+
+To uninstall, run `make uninstall` and then restart `xdg-desktop-portal`.
+
+### After installing
+
+Reload systemd and D-Bus, then restart the portal:
+
+```sh
+systemctl --user daemon-reload
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
+systemctl --user restart xdg-desktop-portal
+```
+
+You don't need to enable anything. The daemon starts on demand the first time
+an app asks for a RemoteDesktop session. To check that it works, run
+`make test` from a source checkout (see [Test](#test)).
+
+### Portal configuration
+
+`xdg-desktop-portal` uses only the first `hyprland-portals.conf` it finds, in
+this order: `~/.config/xdg-desktop-portal/`, `/etc/xdg/xdg-desktop-portal/`,
+`/usr/share/xdg-desktop-portal/`. The copy shipped here repeats the system
+default (`hyprland;gtk`) and adds the RemoteDesktop line.
+
+If you already have your own `~/.config/xdg-desktop-portal/hyprland-portals.conf`,
+it takes precedence over the package's copy. `make install` would overwrite
+it, so back it up first. In both cases, add this line to your file under
+`[preferred]`:
+
+```ini
+org.freedesktop.impl.portal.RemoteDesktop=hyprland-remote
+```
+
 ## How it works
 
 ```
@@ -41,49 +127,9 @@ app (Deskflow) ──libportal──▶ xdg-desktop-portal ──D-Bus──▶ 
 - **Stuck input:** keys and buttons still held are released when a client
   stops emulating, closes a device, disconnects, or its session closes.
 
-## Build
-
-You need `libei`, `systemd-libs`, `wayland`, `libxkbcommon` and
-`wayland-scanner`. For the tests you also need `libportal` and `python-gobject`
-with GTK 4.
-
-```sh
-make
-```
-
-## Install (per user, no root)
-
-```sh
-make install
-systemctl --user daemon-reload
-busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
-systemctl --user restart xdg-desktop-portal
-```
-
-This installs:
-
-| File | Purpose |
-|------|---------|
-| `~/.local/libexec/hyprland-remote-desktop-portal` | the daemon |
-| `~/.local/share/xdg-desktop-portal/portals/hyprland-remote.portal` | registers the backend |
-| `~/.local/share/dbus-1/services/…hyprland_remote.service` | D-Bus activation |
-| `~/.config/systemd/user/hyprland-remote-desktop-portal.service` | the service D-Bus activates |
-| `~/.config/xdg-desktop-portal/hyprland-portals.conf` | routes RemoteDesktop here |
-
-The daemon starts on demand the first time an app asks for a RemoteDesktop
-session, so you don't need to enable anything.
-
-`hyprland-portals.conf` in `~/.config` **replaces** the system copy. It repeats
-the system default (`hyprland;gtk`) and adds the RemoteDesktop line. If you
-already have your own copy, add just this line to it instead:
-
-```ini
-org.freedesktop.impl.portal.RemoteDesktop=hyprland-remote
-```
-
-To uninstall, run `make uninstall` and then restart `xdg-desktop-portal`.
-
 ## Test
+
+The tests also need `libportal` and `python-gobject` with GTK 4.
 
 ```sh
 make test

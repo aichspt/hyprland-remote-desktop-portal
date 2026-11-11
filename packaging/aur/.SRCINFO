@@ -1,0 +1,23 @@
+pkgbase = hyprland-remote-desktop-portal-git
+	pkgdesc = RemoteDesktop portal backend for Hyprland (input injection via libei)
+	pkgver = r1.ff47513
+	pkgrel = 1
+	url = https://github.com/aichspt/hyprland-remote-desktop-portal
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = git
+	depends = libei
+	depends = systemd-libs
+	depends = wayland
+	depends = libxkbcommon
+	depends = xdg-desktop-portal
+	optdepends = xdg-desktop-portal-hyprland: the other Hyprland portal interfaces
+	optdepends = hyprland-guiutils: permission prompt for Flatpak and Snap apps
+	provides = hyprland-remote-desktop-portal
+	conflicts = hyprland-remote-desktop-portal
+	backup = etc/xdg/xdg-desktop-portal/hyprland-portals.conf
+	source = git+https://github.com/aichspt/hyprland-remote-desktop-portal.git
+	sha256sums = SKIP
+
+pkgname = hyprland-remote-desktop-portal-git

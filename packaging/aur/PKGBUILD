@@ -1,0 +1,43 @@
+# Maintainer: pheaktra <aichannsopheaktra@gmail.com>
+pkgname=hyprland-remote-desktop-portal-git
+_pkgname=hyprland-remote-desktop-portal
+pkgver=r1.ff47513
+pkgrel=1
+pkgdesc='RemoteDesktop portal backend for Hyprland (input injection via libei)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/aichspt/hyprland-remote-desktop-portal'
+license=('MIT')
+depends=('libei' 'systemd-libs' 'wayland' 'libxkbcommon' 'xdg-desktop-portal')
+makedepends=('git')
+optdepends=('xdg-desktop-portal-hyprland: the other Hyprland portal interfaces'
+            'hyprland-guiutils: permission prompt for Flatpak and Snap apps')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+backup=('etc/xdg/xdg-desktop-portal/hyprland-portals.conf')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  if git describe --tags >/dev/null 2>&1; then
+    git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+build() {
+  cd "$_pkgname"
+  make
+}
+
+package() {
+  cd "$_pkgname"
+  make DESTDIR="$pkgdir" \
+    PREFIX=/usr \
+    LIBEXECDIR=/usr/lib \
+    SYSTEMD_USER_DIR=/usr/lib/systemd/user \
+    PORTAL_CONF_DIR=/etc/xdg/xdg-desktop-portal \
+    install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

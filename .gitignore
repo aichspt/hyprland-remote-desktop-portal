@@ -1,1 +1,5 @@
 build/
+packaging/aur/src/
+packaging/aur/pkg/
+packaging/aur/hyprland-remote-desktop-portal/
+packaging/aur/*.pkg.tar.*
