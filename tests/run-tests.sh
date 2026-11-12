@@ -12,16 +12,20 @@ pass=0 failed=0
 ok() { echo "  PASS  $*"; pass=$((pass + 1)); }
 bad() { echo "  FAIL  $*"; failed=$((failed + 1)); }
 
-for cmd in hyprctl jq python3; do
+for cmd in hyprctl jq python3 wl-copy wl-paste; do
 	command -v "$cmd" >/dev/null || { echo "missing $cmd"; exit 2; }
 done
 [[ -x $CLIENT ]] || { echo "build the client first: make build/rd-test-client"; exit 2; }
 
 probe_log=$(mktemp)
+saved_clip=$(mktemp)
+wl-paste -n >"$saved_clip" 2>/dev/null && have_saved_clip=1 || have_saved_clip=0
 cleanup() {
 	[[ -n ${CLIENT_PID:-} ]] && kill "$CLIENT_PID" 2>/dev/null
 	[[ -n ${PROBE_PID:-} ]] && kill "$PROBE_PID" 2>/dev/null
-	rm -f "$probe_log"
+	# put back whatever text was on the clipboard before the test
+	(( have_saved_clip )) && wl-copy <"$saved_clip"
+	rm -f "$probe_log" "$saved_clip"
 }
 trap cleanup EXIT
 
@@ -38,11 +42,36 @@ send() {
 echo "connecting through the portal..."
 while IFS= read -r -t 10 line <&"${RD[0]}"; do
 	echo "  client: $line"
+	[[ $line == STARTED* ]] && started_line=$line
 	[[ $line == READY ]] && break
 	[[ $line == ERR* ]] && { bad "portal session: $line"; exit 1; }
 done
 [[ ${line:-} == READY ]] && ok "RemoteDesktop session + ConnectToEIS + devices ready" ||
 	{ bad "client never became ready"; exit 1; }
+
+# ---- clipboard -------------------------------------------------------------
+if [[ $started_line != *clipboard=1* ]]; then
+	bad "clipboard was not enabled for the session ($started_line)"
+else
+	ok "clipboard enabled for the session"
+	host_text="hrdp host clipboard $RANDOM"
+	wl-copy "$host_text"
+	sleep 0.3
+	send cbmimes
+	[[ $reply == "OK owner=0"*text/plain* ]] && ok "host copy reaches the session (${reply#OK })" ||
+		bad "host copy not announced: $reply"
+	send cbget "text/plain;charset=utf-8"
+	[[ $reply == "OK $host_text" ]] && ok "session reads the host clipboard" || bad "session read: $reply"
+
+	remote_text="hrdp remote clipboard $RANDOM"
+	send cbset "$remote_text"
+	sleep 0.3
+	got=$(timeout 5 wl-paste -n 2>&1)
+	[[ $got == "$remote_text" ]] && ok "host pastes the session's clipboard" || bad "host paste: $got"
+	send cbmimes
+	[[ $reply == "OK owner=1"* ]] && ok "session sees itself as the clipboard owner" ||
+		bad "session ownership: $reply"
+fi
 
 # ---- absolute motion -----------------------------------------------------
 send regions

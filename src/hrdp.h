@@ -2,7 +2,8 @@
  *
  * Input arriving from portal clients (through libei, or through the legacy
  * Notify* D-Bus methods) is injected into the compositor with the
- * wlr-virtual-pointer and virtual-keyboard Wayland protocols.
+ * wlr-virtual-pointer and virtual-keyboard Wayland protocols. The clipboard
+ * is shared with ext-data-control.
  */
 #pragma once
 
@@ -77,6 +78,7 @@ struct wl_state {
 	struct zwlr_virtual_pointer_manager_v1 *pointer_manager;
 	struct zwp_virtual_keyboard_manager_v1 *keyboard_manager;
 	struct zxdg_output_manager_v1 *xdg_output_manager;
+	struct ext_data_control_manager_v1 *data_control_manager;
 	struct wl_list outputs; /* struct output.link */
 	bool layout_changed;
 };
@@ -128,6 +130,7 @@ struct session {
 	sd_bus_slot *slot;
 	uint32_t devices; /* selected, then granted */
 	bool started;
+	bool clipboard_requested, clipboard_enabled;
 
 	struct vinput vi;
 
@@ -162,3 +165,11 @@ void session_destroy(struct session *s, bool emit_closed);
 int session_start_input(struct session *s);
 int session_connect_eis(struct session *s);
 void sessions_layout_changed(void);
+
+/* ---- clipboard -------------------------------------------------------- */
+
+int clipboard_init(void);
+void clipboard_finish(void);
+bool clipboard_available(void);
+void clipboard_session_started(struct session *s);
+void clipboard_session_closed(struct session *s);

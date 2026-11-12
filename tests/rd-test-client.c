@@ -8,6 +8,9 @@
  *   button CODE 1|0         press/release an evdev button (BTN_LEFT = 272)
  *   scroll V120             vertical wheel, 120 = one detent
  *   key CODE 1|0            press/release an evdev key
+ *   cbmimes                 clipboard state as "owner=0|1 MIME..."
+ *   cbget MIME              read the clipboard as MIME (must be text)
+ *   cbset TEXT              put TEXT on the clipboard as text/plain
  *   quit
  * "READY" is printed once all devices are emulating.
  */
@@ -19,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static GMainLoop *loop;
 static XdpPortal *portal;
@@ -28,6 +32,7 @@ static struct ei_device *dev_rel, *dev_abs, *dev_kbd;
 static uint32_t sequence;
 static bool ready;
 static int exit_code = 1;
+static char *clip_text; /* what cbset put on the clipboard */
 
 static void fail(const char *what, GError *err)
 {
@@ -104,6 +109,68 @@ static void frame(struct ei_device *d)
 	ei_device_frame(d, ei_now(ei));
 }
 
+/* ---- clipboard -------------------------------------------------------- */
+
+static void on_selection_transfer(XdpSession *s, const char *mime, guint serial, gpointer data)
+{
+	int fd = xdp_session_selection_write(session, serial);
+	gboolean ok = fd >= 0 && clip_text && write(fd, clip_text, strlen(clip_text)) == (ssize_t)strlen(clip_text);
+	if (fd >= 0)
+		close(fd);
+	xdp_session_selection_write_done(session, serial, ok);
+}
+
+static void clip_mimes(void)
+{
+	const char **mimes = xdp_session_get_selection_mime_types(session);
+	printf("OK owner=%d", xdp_session_is_selection_owned_by_session(session));
+	for (size_t i = 0; mimes && mimes[i]; i++)
+		printf(" %s", mimes[i]);
+	printf("\n");
+}
+
+static void clip_get(const char *mime)
+{
+	char buf[4096];
+	size_t len = 0;
+	ssize_t n;
+
+	int fd = xdp_session_selection_read(session, mime);
+	if (fd < 0) {
+		printf("ERR SelectionRead failed\n");
+		return;
+	}
+	while (len < sizeof(buf) - 1 && (n = read(fd, buf + len, sizeof(buf) - 1 - len)) > 0)
+		len += n;
+	close(fd);
+	buf[len] = '\0';
+	printf("OK %s\n", buf);
+}
+
+static void clip_set(const char *text)
+{
+	static const char *mimes[] = {"text/plain;charset=utf-8", "text/plain", NULL};
+	g_free(clip_text);
+	clip_text = g_strdup(text);
+	xdp_session_set_selection(session, mimes);
+	printf("OK\n");
+}
+
+/* Handles commands with string arguments; returns false for the others. */
+static bool run_clip_command(char *line)
+{
+	g_strchomp(line);
+	if (strcmp(line, "cbmimes") == 0)
+		clip_mimes();
+	else if (g_str_has_prefix(line, "cbget "))
+		clip_get(line + 6);
+	else if (g_str_has_prefix(line, "cbset "))
+		clip_set(line + 6);
+	else
+		return false;
+	return true;
+}
+
 static void run_command(char *line)
 {
 	char cmd[32];
@@ -112,6 +179,10 @@ static void run_command(char *line)
 
 	if (n < 1)
 		return;
+	if (ready && xdp_session_is_clipboard_enabled(session) && run_clip_command(line)) {
+		fflush(stdout);
+		return;
+	}
 	if (strcmp(cmd, "quit") == 0) {
 		exit_code = 0;
 		g_main_loop_quit(loop);
@@ -174,7 +245,8 @@ static void on_started(GObject *src, GAsyncResult *res, gpointer data)
 
 	if (!xdp_session_start_finish(session, res, &err))
 		return fail("Start", err);
-	printf("STARTED devices=0x%x\n", xdp_session_get_devices(session));
+	printf("STARTED devices=0x%x clipboard=%d\n", xdp_session_get_devices(session),
+	       xdp_session_is_clipboard_enabled(session));
 	fflush(stdout);
 
 	int fd = xdp_session_connect_to_eis(session, &err);
@@ -202,6 +274,9 @@ static void on_created(GObject *src, GAsyncResult *res, gpointer data)
 	session = xdp_portal_create_remote_desktop_session_finish(portal, res, &err);
 	if (!session)
 		return fail("CreateSession", err);
+	/* Deskflow asks for the clipboard before starting, like this */
+	g_signal_connect(session, "selection-transfer", G_CALLBACK(on_selection_transfer), NULL);
+	xdp_session_request_clipboard(session);
 	xdp_session_start(session, NULL, NULL, on_started, NULL);
 }
 

@@ -74,7 +74,7 @@ static int reply_start(sd_bus_message *call, struct session *s, uint32_t respons
 {
 	if (response == RESPONSE_OK)
 		return sd_bus_reply_method_return(call, "ua{sv}", RESPONSE_OK, 2, "devices", "u", s->devices,
-						  "clipboard_enabled", "b", 0);
+						  "clipboard_enabled", "b", s->clipboard_enabled);
 	return sd_bus_reply_method_return(call, "ua{sv}", response, 0);
 }
 
@@ -177,7 +177,11 @@ static void finish_start(struct session *s, sd_bus_message *call, bool allowed)
 		response = session_start_input(s) < 0 ? RESPONSE_OTHER : RESPONSE_OK;
 	else
 		log_info("%s: denied for app '%s'", s->handle, s->app_id);
+	if (response == RESPONSE_OK)
+		s->clipboard_enabled = s->clipboard_requested && clipboard_available();
 	reply_start(call, s, response);
+	if (response == RESPONSE_OK)
+		clipboard_session_started(s);
 }
 
 static int dialog_exited(sd_event_source *src, const siginfo_t *si, void *data)
@@ -209,7 +213,8 @@ static int ask_user(struct session *s, sd_bus_message *call)
 	int p[2];
 	const char *who = *s->app_id ? s->app_id : "An application";
 
-	if (asprintf(&text, "%s wants to control your keyboard and mouse.", who) < 0)
+	if (asprintf(&text, "%s wants to control your keyboard and mouse%s.", who,
+		     s->clipboard_requested ? " and use your clipboard" : "") < 0)
 		return -ENOMEM;
 	if (pipe2(p, O_CLOEXEC) < 0) {
 		free(text);
@@ -477,5 +482,5 @@ int portal_init(void)
 		log_error("cannot export %s: %s", IFACE_REMOTE, strerror(-r));
 		return r;
 	}
-	return 0;
+	return clipboard_init();
 }

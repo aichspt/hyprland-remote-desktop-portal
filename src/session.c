@@ -379,6 +379,7 @@ void session_destroy(struct session *s, bool emit_closed)
 	if (s->dialog_fd >= 0)
 		close(s->dialog_fd);
 
+	clipboard_session_closed(s);
 	eis_teardown(s);
 	vinput_destroy(&s->vi);
 	if (emit_closed)

@@ -10,7 +10,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wno-unused-parameter -Ibuild $(shell pkg-confi
 LDLIBS += $(shell pkg-config --libs $(PKGS))
 
 BIN := hyprland-remote-desktop-portal
-PROTOCOLS := wlr-virtual-pointer-unstable-v1 virtual-keyboard-unstable-v1 xdg-output-unstable-v1
+PROTOCOLS := wlr-virtual-pointer-unstable-v1 virtual-keyboard-unstable-v1 xdg-output-unstable-v1 ext-data-control-v1
 PROTO_H := $(PROTOCOLS:%=build/%-client-protocol.h)
 PROTO_C := $(PROTOCOLS:%=build/%-protocol.c)
 SRCS := $(wildcard src/*.c)

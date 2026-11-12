@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "ext-data-control-v1-client-protocol.h"
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
@@ -169,6 +170,8 @@ static void registry_global(void *data, struct wl_registry *reg, uint32_t name, 
 		wl->pointer_manager = wl_registry_bind(reg, name, &zwlr_virtual_pointer_manager_v1_interface, 1);
 	} else if (strcmp(iface, zwp_virtual_keyboard_manager_v1_interface.name) == 0) {
 		wl->keyboard_manager = wl_registry_bind(reg, name, &zwp_virtual_keyboard_manager_v1_interface, 1);
+	} else if (strcmp(iface, ext_data_control_manager_v1_interface.name) == 0) {
+		wl->data_control_manager = wl_registry_bind(reg, name, &ext_data_control_manager_v1_interface, 1);
 	} else if (strcmp(iface, zxdg_output_manager_v1_interface.name) == 0) {
 		wl->xdg_output_manager =
 			wl_registry_bind(reg, name, &zxdg_output_manager_v1_interface, version < 3 ? version : 3);
@@ -228,6 +231,8 @@ int wl_init(struct wl_state *wl)
 	}
 	if (!wl->xdg_output_manager)
 		log_warn("compositor lacks xdg-output; absolute pointer motion is unavailable");
+	if (!wl->data_control_manager)
+		log_warn("compositor lacks ext-data-control; the clipboard is unavailable");
 	wl->layout_changed = false;
 	return 0;
 }
@@ -242,6 +247,8 @@ void wl_finish(struct wl_state *wl)
 		output_destroy(o);
 	if (wl->xdg_output_manager)
 		zxdg_output_manager_v1_destroy(wl->xdg_output_manager);
+	if (wl->data_control_manager)
+		ext_data_control_manager_v1_destroy(wl->data_control_manager);
 	if (wl->pointer_manager)
 		zwlr_virtual_pointer_manager_v1_destroy(wl->pointer_manager);
 	if (wl->keyboard_manager)

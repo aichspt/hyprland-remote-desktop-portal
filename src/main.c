@@ -148,6 +148,7 @@ out:
 		sd_bus_flush(server.bus);
 		sd_bus_flush_close_unref(server.bus);
 	}
+	clipboard_finish();
 	wl_finish(&server.wl);
 	if (server.event)
 		sd_event_unref(server.event);

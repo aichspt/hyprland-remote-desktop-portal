@@ -1,7 +1,7 @@
 # hyprland-remote-desktop-portal
 
 A RemoteDesktop portal backend (`org.freedesktop.impl.portal.RemoteDesktop`)
-for Hyprland.
+for Hyprland, with clipboard sharing (`org.freedesktop.impl.portal.Clipboard`).
 
 `xdg-desktop-portal-hyprland` doesn't implement RemoteDesktop. Without it,
 programs that need to inject input through the portal fail with:
@@ -11,7 +11,8 @@ No such interface "org.freedesktop.portal.RemoteDesktop"
 ```
 
 Deskflow in client mode is one of these programs. This backend provides only
-that interface, alongside the stock Hyprland portal.
+those two interfaces, alongside the stock Hyprland portal. With it, Deskflow
+can control this machine and share its clipboard with the other computers.
 
 ## Install
 
@@ -88,16 +89,20 @@ an app asks for a RemoteDesktop session. To check that it works, run
 `xdg-desktop-portal` uses only the first `hyprland-portals.conf` it finds, in
 this order: `~/.config/xdg-desktop-portal/`, `/etc/xdg/xdg-desktop-portal/`,
 `/usr/share/xdg-desktop-portal/`. The copy shipped here repeats the system
-default (`hyprland;gtk`) and adds the RemoteDesktop line.
+default (`hyprland;gtk`) and adds the RemoteDesktop and Clipboard lines.
 
 If you already have your own `~/.config/xdg-desktop-portal/hyprland-portals.conf`,
 it takes precedence over the package's copy. `make install` would overwrite
-it, so back it up first. In both cases, add this line to your file under
+it, so back it up first. In both cases, add these lines to your file under
 `[preferred]`:
 
 ```ini
 org.freedesktop.impl.portal.RemoteDesktop=hyprland-remote
+org.freedesktop.impl.portal.Clipboard=hyprland-remote
 ```
+
+`xdg-desktop-portal` reads this file only when it starts, so restart it after
+changing it, and then restart Deskflow.
 
 ## How it works
 
@@ -126,6 +131,15 @@ app (Deskflow) ──libportal──▶ xdg-desktop-portal ──D-Bus──▶ 
   axis, keycode and keysym).
 - **Stuck input:** keys and buttons still held are released when a client
   stops emulating, closes a device, disconnects, or its session closes.
+- **Clipboard:** a session that calls `RequestClipboard` before `Start` gets
+  the clipboard. The backend watches and sets Hyprland's clipboard with
+  `ext-data-control-v1`, so it doesn't need a window or focus. Copies on this
+  machine are announced to the session with `SelectionOwnerChanged` and read
+  with `SelectionRead`. Data the session puts on the clipboard with
+  `SetSelection` is fetched from it (`SelectionTransfer` / `SelectionWrite`)
+  only when an app pastes. If the session closes while it owns the clipboard,
+  the clipboard is emptied. Only the regular clipboard is shared, not the
+  primary (middle-click) selection.
 
 ## Test
 
@@ -144,8 +158,11 @@ libportal and libei calls Deskflow makes, and checks:
 - left and right clicks, and wheel scrolling, in a GTK probe window
 - typing, including Shift+A → `A`
 - a key held down when the client disconnects is released
+- the clipboard in both directions: a `wl-copy` on the host is announced to and
+  read by the session, and text the session sets is what `wl-paste` returns
+  (the clipboard's previous text is put back afterwards)
 
-The test takes over the pointer for a few seconds. Don't touch the mouse or
+The test also needs `wl-clipboard`. It takes over the pointer for a few seconds. Don't touch the mouse or
 keyboard while it runs.
 
 ## Access control
@@ -155,9 +172,11 @@ keyboard while it runs.
 | No app id (an unsandboxed host program, e.g. Deskflow from pacman) | allowed without asking |
 | App with an app id (Flatpak, Snap) | asks with `hyprland-dialog`: *Deny*, *Allow once* or *Always allow* |
 
-Host programs aren't prompted by default because they can already use the
-virtual pointer and keyboard protocols directly, so a prompt wouldn't protect
-anything.
+The clipboard is part of the same decision: a session that asked for it gets
+it when the session is allowed, and the prompt mentions it. Host programs
+aren't prompted by default because they can already use the virtual pointer,
+virtual keyboard and data-control protocols directly, so a prompt wouldn't
+protect anything.
 
 Settings go in `~/.config/hyprland-remote-desktop-portal/config`:
 
@@ -187,7 +206,10 @@ build/hyprland-remote-desktop-portal --verbose
 ## Limitations
 
 - No touch input. `AvailableDeviceTypes` is keyboard and pointer only.
-- No clipboard, and no ScreenCast streams. Absolute coordinates in the
+- Images on the clipboard don't work yet with Deskflow. The backend passes
+  `image/png` through like any other type, but images copied on a macOS server
+  have so far arrived blank. Text works in both directions.
+- No primary selection and no ScreenCast streams. Absolute coordinates in the
   `NotifyPointerMotionAbsolute` D-Bus method are relative to the whole layout,
   not to a stream.
 - `persist_mode` is ignored. Every session is allowed again according to the
